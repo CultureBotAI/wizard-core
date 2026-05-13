@@ -45,6 +45,17 @@ DEFAULT_GITIGNORE = """# Large binary outputs
 *.doc
 *.pptx
 
+# …but assembled deliverables should travel with the project repo.
+# Each tool's assembler writes to one of these well-known filenames.
+!deck.pdf
+!deck.html
+!deck.pptx
+!deck_editable.pptx
+!manuscript.pdf
+!manuscript.docx
+!proposal.pdf
+!proposal.docx
+
 # Temporary caches
 __pycache__/
 .cache/
