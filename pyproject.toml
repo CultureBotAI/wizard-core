@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wizard-core"
+version = "0.1.0"
+description = "Shared infrastructure for document-generation wizards (slide-wizard, proposal-wizard, repo-research-writer)."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.9"
+authors = [{ name = "CultureBotAI" }]
+keywords = ["llm", "anthropic", "document-generation", "workflow", "state-machine"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "License :: OSI Approved :: BSD License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "anthropic>=0.40.0",
+]
+
+[project.optional-dependencies]
+literature = [
+    "requests>=2.31",
+]
+parsers = [
+    "python-docx>=1.1",
+    "pypdf>=4.0",
+    "python-pptx>=0.6.23",
+]
+dev = [
+    "pytest>=7",
+    "pytest-cov>=4",
+]
+
+[project.urls]
+Homepage = "https://github.com/CultureBotAI/wizard-core"
+Issues = "https://github.com/CultureBotAI/wizard-core/issues"
+
+[tool.setuptools.packages.find]
+include = ["wizard_core*"]
+exclude = ["tests*"]
