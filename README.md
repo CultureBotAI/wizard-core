@@ -10,15 +10,22 @@ These wizards run as **Claude Code skills** — Claude itself is the LLM runtime
 |---|---|
 | `wizard_core.state_manager` | Generic workflow state machine. Per-stage status, file references, timestamps, optional git-commit hashes. Tool-name and stage-list parametrized via `WorkflowSpec`. |
 | `wizard_core.git_manager` | Per-output-project git with safety guards that refuse to operate on the tool repo itself. Configured via `ToolGuard`. |
-| `wizard_core.google_client` | Shared Google Drive / Slides / Docs access via the CultureBotAI service account (`culturebot-data-downloader@culturebot-476200.iam.gserviceaccount.com`). Optional extra: `pip install wizard-core[google]`. |
-| `wizard_core.document_parsers` | (Phase 5) Manuscript/proposal/PDF/DOCX/PPTX readers. |
-| `wizard_core.citation_validator` | (Phase 5) BibTeX cross-checking. |
-| `wizard_core.literature_search` | (Phase 5) PubMed + Semantic Scholar queries. |
-| `wizard_core.schema_builder` | (Phase 5) LinkML-driven config helpers. |
-| `wizard_core.evidence_tracker` | (Phase 5) Claim-to-evidence linkage. |
-| `wizard_core.manifest_generator` | (Phase 5) Output bundle manifests. |
+| `wizard_core.google_client` | Shared Google Drive / Slides / Docs access via the CultureBotAI service account. Optional extra: `pip install wizard-core[google]`. |
+| `wizard_core.document_parsers` | PDF / DOCX / HTML / YAML parsers with lazy optional deps. Promoted from rrwrite in 0.2.0. |
+| `wizard_core.citation_validator` | Defense-in-depth citation validation: entry, business-logic, assembly, and audit-trail layers. Paperpile + BibTeX support. Promoted from rrwrite in 0.2.0. |
+| `wizard_core.literature_search` | Multi-source merge / dedup / sort with pluggable backends. Promoted from rrwrite in 0.2.0. |
+| `wizard_core.schema_builder` | Build JSON submission / structure schemas from extracted requirements + caller-supplied templates. Promoted from rrwrite in 0.2.0. |
+| `wizard_core.evidence_tracker` | Track claims and link them to citations / datasets / prior works; generates markdown + JSON reports. Promoted from pwiz in 0.2.0. |
+| `wizard_core.manifest_generator` | Figure / table manifest generation and validation, with per-section lookup. Promoted from rrwrite in 0.2.0. |
 
-No runtime dependencies. Optional extras (`[parsers]`, `[literature]`) pull in libraries for Phase 5 modules as they're ported.
+No required runtime dependencies. Optional extras pull in libraries on demand:
+
+| Extra | Pulls in | Used by |
+|---|---|---|
+| `wizard-core[parsers]` | PyPDF2, python-docx, python-pptx, bs4, lxml, pyyaml | `document_parsers` |
+| `wizard-core[literature]` | requests, requests-cache | `literature_search` |
+| `wizard-core[validation]` | jsonschema | `manifest_generator` validators |
+| `wizard-core[google]` | google-auth, google-api-python-client | `google_client` |
 
 ## Install
 
@@ -52,7 +59,7 @@ manager.commit_stage(stage="storyboard", files=["storyboard.json"], description=
 
 ## Status
 
-Phase 0 alpha. `state_manager` and `git_manager` are functional and tested (6 passing). Phase 5 modules are placeholders to be filled in as slide-wizard, proposal-wizard, and rrwrite migrate.
+0.2.0 — the six previously-placeholder modules (`document_parsers`, `citation_validator`, `literature_search`, `schema_builder`, `evidence_tracker`, `manifest_generator`) are now ported in and re-exported from `wizard_core`. Downstream wizards (proposal-wizard, repo-research-writer) are being refactored to import from here. See [wizard-claw](https://github.com/CultureBotAI/wizard-claw) for the orchestration layer that coordinates the migration.
 
 ## License
 
