@@ -5,12 +5,12 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "wizard-core"
 version = "0.1.0"
-description = "Shared infrastructure for document-generation wizards (slide-wizard, proposal-wizard, repo-research-writer)."
+description = "Shared infrastructure for Claude-Code-driven document-generation wizards (slide-wizard, proposal-wizard, repo-research-writer)."
 readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.9"
 authors = [{ name = "CultureBotAI" }]
-keywords = ["llm", "anthropic", "document-generation", "workflow", "state-machine"]
+keywords = ["claude-code", "document-generation", "workflow", "state-machine"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "License :: OSI Approved :: BSD License",
@@ -20,9 +20,10 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
 ]
-dependencies = [
-    "anthropic>=0.40.0",
-]
+# No runtime dependencies — content generation runs inside Claude Code,
+# not via an SDK. Optional extras pull in parsers and search libraries
+# for the modules ported from rrwrite/pwiz in Phase 5.
+dependencies = []
 
 [project.optional-dependencies]
 literature = [
