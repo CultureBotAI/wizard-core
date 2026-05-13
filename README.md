@@ -10,6 +10,7 @@ These wizards run as **Claude Code skills** — Claude itself is the LLM runtime
 |---|---|
 | `wizard_core.state_manager` | Generic workflow state machine. Per-stage status, file references, timestamps, optional git-commit hashes. Tool-name and stage-list parametrized via `WorkflowSpec`. |
 | `wizard_core.git_manager` | Per-output-project git with safety guards that refuse to operate on the tool repo itself. Configured via `ToolGuard`. |
+| `wizard_core.google_client` | Shared Google Drive / Slides / Docs access via the CultureBotAI service account (`culturebot-data-downloader@culturebot-476200.iam.gserviceaccount.com`). Optional extra: `pip install wizard-core[google]`. |
 | `wizard_core.document_parsers` | (Phase 5) Manuscript/proposal/PDF/DOCX/PPTX readers. |
 | `wizard_core.citation_validator` | (Phase 5) BibTeX cross-checking. |
 | `wizard_core.literature_search` | (Phase 5) PubMed + Semantic Scholar queries. |

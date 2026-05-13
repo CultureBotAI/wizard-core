@@ -21,11 +21,16 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
 ]
 # No runtime dependencies — content generation runs inside Claude Code,
-# not via an SDK. Optional extras pull in parsers and search libraries
-# for the modules ported from rrwrite/pwiz in Phase 5.
+# not via an SDK. Optional extras pull in libraries for specific
+# capabilities.
 dependencies = []
 
 [project.optional-dependencies]
+google = [
+    # Drive / Slides / Docs access via the CultureBotAI service account
+    "google-auth>=2.20",
+    "google-api-python-client>=2.100",
+]
 literature = [
     "requests>=2.31",
 ]
