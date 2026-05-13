@@ -238,6 +238,152 @@ class StateManager:
             "progress_percentage": (completed / total * 100) if total else 0.0,
         }
 
+    # ----- revision-loop tracking -----
+    #
+    # Generic critique → revise → re-critique iteration tracking. Tools that
+    # want to use this must include "revision" in their WorkflowSpec.stages.
+    # Iteration records live under state["workflow_status"]["revision"]["data"].
+    # Pattern promoted from `repo-research-writer/scripts/rrwrite_state_manager.py`
+    # so slide-wizard, proposal-wizard, and rrwrite share one implementation.
+
+    def _require_revision_stage(self) -> None:
+        if "revision" not in self.state["workflow_status"]:
+            raise ValueError(
+                f"'revision' stage missing from WorkflowSpec for "
+                f"{self.spec.tool_name!r}. Add 'revision' to your spec's "
+                f"stages to use revision tracking."
+            )
+
+    def start_revision(
+        self,
+        max_iterations: int,
+        min_improvement: float = 0.2,
+    ) -> None:
+        """Initialize revision tracking under the 'revision' workflow stage."""
+        self._require_revision_stage()
+        slot = self.state["workflow_status"]["revision"]
+        slot["status"] = "in_progress"
+        slot["data"] = {
+            "max_iterations": max_iterations,
+            "min_improvement": min_improvement,
+            "current_iteration": 0,
+            "iterations": [],
+            "convergence_status": None,
+            "convergence_reason": None,
+        }
+        self._save_state()
+
+    def record_iteration(
+        self,
+        iteration: int,
+        sections_revised: Sequence[str],
+        metrics_before: Dict[str, int],
+        metrics_after: Dict[str, int],
+        critique_files: Optional[Dict[str, str]] = None,
+    ) -> Dict[str, Any]:
+        """Append one revision iteration with convergence metrics; return the record."""
+        self._require_revision_stage()
+        rev = self.state["workflow_status"]["revision"].setdefault("data", {})
+        rev.setdefault("iterations", [])
+
+        major_before = int(metrics_before.get("major", 0))
+        major_after = int(metrics_after.get("major", 0))
+        minor_before = int(metrics_before.get("minor", 0))
+        minor_after = int(metrics_after.get("minor", 0))
+
+        major_resolved = major_before - major_after
+        minor_resolved = minor_before - minor_after
+        improvement_rate = (
+            major_resolved / major_before if major_before > 0 else 0.0
+        )
+
+        record = {
+            "iteration": iteration,
+            "sections_revised": list(sections_revised),
+            "issues_before": {"major": major_before, "minor": minor_before},
+            "issues_after": {"major": major_after, "minor": minor_after},
+            "convergence_metrics": {
+                "major_resolved": major_resolved,
+                "minor_resolved": minor_resolved,
+                "improvement_rate": improvement_rate,
+            },
+            "critique_files": critique_files or {},
+            "git_commit": self._get_git_commit_short(),
+            "timestamp": self._now(),
+        }
+        rev["iterations"].append(record)
+        rev["current_iteration"] = iteration
+        self._save_state()
+        return record
+
+    @staticmethod
+    def check_convergence(
+        metrics_after: Dict[str, int],
+        iteration: int,
+        max_iterations: int,
+        improvement_rate: float,
+        min_improvement: float = 0.2,
+    ) -> tuple:
+        """Decide whether the revision loop should stop.
+
+        Returns (should_stop, reason) where reason is one of
+        'major_issues_resolved', 'max_iterations_reached',
+        'stalled_no_improvement', or None when the loop should continue.
+        """
+        if int(metrics_after.get("major", 0)) == 0:
+            return True, "major_issues_resolved"
+        if iteration >= max_iterations:
+            return True, "max_iterations_reached"
+        if improvement_rate < min_improvement:
+            return True, "stalled_no_improvement"
+        return False, None
+
+    def complete_revision(
+        self,
+        convergence_status: str,
+        convergence_reason: str,
+    ) -> None:
+        """Mark revision tracking completed with a convergence verdict."""
+        self._require_revision_stage()
+        slot = self.state["workflow_status"]["revision"]
+        slot["status"] = "completed"
+        slot["completed_at"] = self._now()
+        slot["git_commit"] = self._get_git_commit_short()
+        data = slot.setdefault("data", {})
+        data["convergence_status"] = convergence_status
+        data["convergence_reason"] = convergence_reason
+        self._save_state()
+
+    def get_revision_summary(self) -> Dict[str, Any]:
+        """Compact summary suitable for status output."""
+        if "revision" not in self.state["workflow_status"]:
+            return {"status": "not_applicable"}
+        slot = self.state["workflow_status"]["revision"]
+        if slot["status"] == "not_started":
+            return {"status": "not_started"}
+        data = slot.get("data", {})
+        iterations = data.get("iterations", [])
+        summary: Dict[str, Any] = {
+            "status": slot["status"],
+            "iterations_run": len(iterations),
+            "max_iterations": data.get("max_iterations"),
+            "current_iteration": data.get("current_iteration", 0),
+            "convergence_status": data.get("convergence_status"),
+            "convergence_reason": data.get("convergence_reason"),
+        }
+        if iterations:
+            first = iterations[0]
+            last = iterations[-1]
+            summary["issues_initial"] = first["issues_before"]
+            summary["issues_final"] = last["issues_after"]
+            summary["total_major_resolved"] = (
+                first["issues_before"]["major"] - last["issues_after"]["major"]
+            )
+            summary["total_minor_resolved"] = (
+                first["issues_before"]["minor"] - last["issues_after"]["minor"]
+            )
+        return summary
+
     def export_state(self) -> Dict[str, Any]:
         return json.loads(json.dumps(self.state))
 
