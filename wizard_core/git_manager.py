@@ -53,6 +53,8 @@ DEFAULT_GITIGNORE = """# Large binary outputs
 !deck_editable.pptx
 !manuscript.pdf
 !manuscript.docx
+!full_manuscript.pdf
+!full_manuscript.docx
 !proposal.pdf
 !proposal.docx
 
