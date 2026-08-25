@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+import os
 import subprocess
 from pathlib import Path
 
@@ -161,6 +163,71 @@ def test_reconcile_noop_without_gitignore(tmp_path: Path, guard: ToolGuard) -> N
     mgr = GitManager(project_dir=proj, guard=guard, verbose=False)
     assert mgr.reconcile_gitignore() == []
     assert not (proj / ".gitignore").exists()
+
+
+def _broken_workspace(tmp_path: Path, guard: ToolGuard, name: str) -> GitManager:
+    proj = tmp_path / name
+    proj.mkdir()
+    mgr = GitManager(project_dir=proj, guard=guard, verbose=False)
+    mgr.initialize_repository()
+    return mgr
+
+
+def test_reconcile_survives_unreadable_gitignore(
+    tmp_path: Path, guard: ToolGuard
+) -> None:
+    """A cosmetic .gitignore problem must not escalate into losing git tracking.
+
+    initialize_repository() runs the repair, and callers upstream catch broad
+    exceptions and drop the GitManager entirely — so a raise here would
+    silently disable all commits for the run.
+    """
+    if os.geteuid() == 0:
+        pytest.skip("root ignores file permissions")
+    mgr = _broken_workspace(tmp_path, guard, "noperm")
+    gitignore = mgr.project_dir / ".gitignore"
+    gitignore.write_text(DEFAULT_GITIGNORE.replace("!deck_vector.pptx\n", ""))
+    gitignore.chmod(0o000)
+    try:
+        assert mgr.reconcile_gitignore() == []
+        # The whole init path stays non-raising.
+        assert not mgr.initialize_repository()
+    finally:
+        gitignore.chmod(0o644)
+
+
+def test_reconcile_survives_gitignore_directory(
+    tmp_path: Path, guard: ToolGuard
+) -> None:
+    mgr = _broken_workspace(tmp_path, guard, "isdir")
+    gitignore = mgr.project_dir / ".gitignore"
+    gitignore.unlink()
+    gitignore.mkdir()
+    assert mgr.reconcile_gitignore() == []
+    assert not mgr.initialize_repository()
+
+
+def test_reconcile_survives_non_utf8_gitignore(
+    tmp_path: Path, guard: ToolGuard
+) -> None:
+    mgr = _broken_workspace(tmp_path, guard, "binary")
+    gitignore = mgr.project_dir / ".gitignore"
+    gitignore.write_bytes(b"*.pptx\n\xff\xfe\x00invalid\n")
+    assert mgr.reconcile_gitignore() == []
+    assert not mgr.initialize_repository()
+
+
+def test_reconcile_failure_is_warned(
+    tmp_path: Path, guard: ToolGuard, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Skipping the repair must be visible, not silent."""
+    mgr = _broken_workspace(tmp_path, guard, "warned")
+    gitignore = mgr.project_dir / ".gitignore"
+    gitignore.write_bytes(b"\xff\xfe\x00invalid\n")
+    with caplog.at_level(logging.WARNING, logger="wizard_core.git_manager"):
+        mgr.reconcile_gitignore()
+    assert any(r.levelno == logging.WARNING for r in caplog.records)
+    assert "deck_vector.pptx" in caplog.text
 
 
 def test_default_whitelist_lines_matches_template() -> None:

@@ -240,12 +240,24 @@ class GitManager:
         Idempotent. Returns the lines added, empty if already up to date. The
         reconciled file is left unstaged; the ignore rules take effect from the
         working tree immediately.
+
+        Best-effort: an unreadable or unwritable .gitignore (a directory, bad
+        permissions, non-UTF-8 bytes) is logged and skipped. A failed repair
+        must stay a no-op — callers run this during initialization, where an
+        exception would be caught upstream and disable git tracking entirely
+        for the run, turning a cosmetic .gitignore problem into a silent loss
+        of all commits.
         """
         gitignore = self.project_dir / ".gitignore"
         if not gitignore.exists():
             return []
 
-        content = gitignore.read_text()
+        try:
+            content = gitignore.read_text()
+        except (OSError, UnicodeError) as exc:
+            self._warn_repair_skipped("read", exc)
+            return []
+
         present = {line.strip() for line in content.splitlines()}
         missing = [line for line in default_whitelist_lines() if line not in present]
         if not missing:
@@ -254,7 +266,11 @@ class GitManager:
         if not content.endswith("\n"):
             content += "\n"
         content += "\n" + RECONCILE_MARKER + "\n" + "\n".join(missing) + "\n"
-        gitignore.write_text(content)
+        try:
+            gitignore.write_text(content)
+        except (OSError, UnicodeError) as exc:
+            self._warn_repair_skipped("write", exc)
+            return []
         if self.verbose:
             self.logger.info(
                 "Reconciled .gitignore in %s: added %s",
@@ -262,6 +278,18 @@ class GitManager:
                 ", ".join(missing),
             )
         return missing
+
+    def _warn_repair_skipped(self, action: str, exc: BaseException) -> None:
+        # Always warned, not gated on verbose: the workspace is left in a state
+        # where deliverables silently will not commit.
+        self.logger.warning(
+            "Could not %s .gitignore in %s (%s); skipping deliverable whitelist "
+            "repair. Artifacts such as deck_vector.pptx may not be committable "
+            "until this file is fixed by hand.",
+            action,
+            self.project_dir,
+            exc,
+        )
 
     def _install_safety_hook(self) -> None:
         hooks_dir = self.git_dir / "hooks"
