@@ -74,7 +74,13 @@ class PDFParser(BaseDocumentParser):
             with open(self.pdf_path, "rb") as f:
                 pdf_reader = PyPDF2.PdfReader(f)
                 for page in pdf_reader.pages:
-                    pages_text.append(page.extract_text())
+                    # `or ""` guards the join below: a page extractor that
+                    # yields None for a page with no text layer would
+                    # otherwise turn one scanned page into a whole-document
+                    # ParsingError. PyPDF2 3.0.1 itself returns "" (verified),
+                    # so this is a defensive invariant for other backends and
+                    # versions, not a fix for a reproducible 3.0.1 bug.
+                    pages_text.append(page.extract_text() or "")
             self.raw_text = "\n".join(pages_text)
             self.structured_data = {
                 "text": self.raw_text,
