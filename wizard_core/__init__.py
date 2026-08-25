@@ -14,6 +14,7 @@ __version__ = "0.2.0"
 
 from wizard_core.state_manager import StateManager, WorkflowSpec
 from wizard_core.git_manager import GitManager, GitSafetyError, ToolGuard
+from wizard_core.paths import PathLike, safe_output_path
 
 __all__ = [
     "StateManager",
@@ -21,6 +22,8 @@ __all__ = [
     "GitManager",
     "GitSafetyError",
     "ToolGuard",
+    "PathLike",
+    "safe_output_path",
 ]
 
 # Document parsing — optional extras (PyPDF2 / python-docx / bs4)
