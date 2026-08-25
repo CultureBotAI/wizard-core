@@ -51,6 +51,7 @@ DEFAULT_GITIGNORE = """# Large binary outputs
 !deck.html
 !deck.pptx
 !deck_editable.pptx
+!deck_vector.pptx
 !manuscript.pdf
 !manuscript.docx
 !full_manuscript.pdf
@@ -80,6 +81,23 @@ build/
 dist/
 *.egg-info/
 """
+
+RECONCILE_MARKER = (
+    "# Added by wizard-core: deliverables whitelisted after this repo was created."
+)
+
+
+def default_whitelist_lines() -> List[str]:
+    """The `!`-prefixed deliverable exceptions in the default .gitignore.
+
+    Derived from DEFAULT_GITIGNORE rather than duplicated, so the repair path
+    below cannot drift from the template.
+    """
+    return [
+        line.strip()
+        for line in DEFAULT_GITIGNORE.splitlines()
+        if line.strip().startswith("!")
+    ]
 
 
 class GitManager:
@@ -181,6 +199,7 @@ class GitManager:
             if self.verbose:
                 self.logger.info("Git already initialized: %s", self.project_dir)
             self._check_remote_url()
+            self.reconcile_gitignore()
             return False
 
         self.project_dir.mkdir(parents=True, exist_ok=True)
@@ -208,6 +227,41 @@ class GitManager:
         if extra:
             content = content + "\n" + extra
         (self.project_dir / ".gitignore").write_text(content)
+
+    def reconcile_gitignore(self) -> List[str]:
+        """Append deliverable whitelist entries missing from an existing .gitignore.
+
+        Workspaces created before a deliverable filename was whitelisted keep
+        the old .gitignore on disk, so `git add` on that artifact fails and the
+        file is never committed (issue #4: deck_vector.pptx). Appending is
+        correct for negation patterns — the last matching rule wins, so these
+        land after the `*.pptx` exclusion they need to override.
+
+        Idempotent. Returns the lines added, empty if already up to date. The
+        reconciled file is left unstaged; the ignore rules take effect from the
+        working tree immediately.
+        """
+        gitignore = self.project_dir / ".gitignore"
+        if not gitignore.exists():
+            return []
+
+        content = gitignore.read_text()
+        present = {line.strip() for line in content.splitlines()}
+        missing = [line for line in default_whitelist_lines() if line not in present]
+        if not missing:
+            return []
+
+        if not content.endswith("\n"):
+            content += "\n"
+        content += "\n" + RECONCILE_MARKER + "\n" + "\n".join(missing) + "\n"
+        gitignore.write_text(content)
+        if self.verbose:
+            self.logger.info(
+                "Reconciled .gitignore in %s: added %s",
+                self.project_dir,
+                ", ".join(missing),
+            )
+        return missing
 
     def _install_safety_hook(self) -> None:
         hooks_dir = self.git_dir / "hooks"
