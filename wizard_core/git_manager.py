@@ -51,8 +51,11 @@ DEFAULT_GITIGNORE = """# Large binary outputs
 !deck.html
 !deck.pptx
 !deck_editable.pptx
+!deck_vector.pptx
 !manuscript.pdf
 !manuscript.docx
+!full_manuscript.pdf
+!full_manuscript.docx
 !proposal.pdf
 !proposal.docx
 
@@ -78,6 +81,23 @@ build/
 dist/
 *.egg-info/
 """
+
+RECONCILE_MARKER = (
+    "# Added by wizard-core: deliverables whitelisted after this repo was created."
+)
+
+
+def default_whitelist_lines() -> List[str]:
+    """The `!`-prefixed deliverable exceptions in the default .gitignore.
+
+    Derived from DEFAULT_GITIGNORE rather than duplicated, so the repair path
+    below cannot drift from the template.
+    """
+    return [
+        line.strip()
+        for line in DEFAULT_GITIGNORE.splitlines()
+        if line.strip().startswith("!")
+    ]
 
 
 class GitManager:
@@ -179,6 +199,7 @@ class GitManager:
             if self.verbose:
                 self.logger.info("Git already initialized: %s", self.project_dir)
             self._check_remote_url()
+            self.reconcile_gitignore()
             return False
 
         self.project_dir.mkdir(parents=True, exist_ok=True)
@@ -206,6 +227,69 @@ class GitManager:
         if extra:
             content = content + "\n" + extra
         (self.project_dir / ".gitignore").write_text(content)
+
+    def reconcile_gitignore(self) -> List[str]:
+        """Append deliverable whitelist entries missing from an existing .gitignore.
+
+        Workspaces created before a deliverable filename was whitelisted keep
+        the old .gitignore on disk, so `git add` on that artifact fails and the
+        file is never committed (issue #4: deck_vector.pptx). Appending is
+        correct for negation patterns — the last matching rule wins, so these
+        land after the `*.pptx` exclusion they need to override.
+
+        Idempotent. Returns the lines added, empty if already up to date. The
+        reconciled file is left unstaged; the ignore rules take effect from the
+        working tree immediately.
+
+        Best-effort: an unreadable or unwritable .gitignore (a directory, bad
+        permissions, non-UTF-8 bytes) is logged and skipped. A failed repair
+        must stay a no-op — callers run this during initialization, where an
+        exception would be caught upstream and disable git tracking entirely
+        for the run, turning a cosmetic .gitignore problem into a silent loss
+        of all commits.
+        """
+        gitignore = self.project_dir / ".gitignore"
+        if not gitignore.exists():
+            return []
+
+        try:
+            content = gitignore.read_text()
+        except (OSError, UnicodeError) as exc:
+            self._warn_repair_skipped("read", exc)
+            return []
+
+        present = {line.strip() for line in content.splitlines()}
+        missing = [line for line in default_whitelist_lines() if line not in present]
+        if not missing:
+            return []
+
+        if not content.endswith("\n"):
+            content += "\n"
+        content += "\n" + RECONCILE_MARKER + "\n" + "\n".join(missing) + "\n"
+        try:
+            gitignore.write_text(content)
+        except (OSError, UnicodeError) as exc:
+            self._warn_repair_skipped("write", exc)
+            return []
+        if self.verbose:
+            self.logger.info(
+                "Reconciled .gitignore in %s: added %s",
+                self.project_dir,
+                ", ".join(missing),
+            )
+        return missing
+
+    def _warn_repair_skipped(self, action: str, exc: BaseException) -> None:
+        # Always warned, not gated on verbose: the workspace is left in a state
+        # where deliverables silently will not commit.
+        self.logger.warning(
+            "Could not %s .gitignore in %s (%s); skipping deliverable whitelist "
+            "repair. Artifacts such as deck_vector.pptx may not be committable "
+            "until this file is fixed by hand.",
+            action,
+            self.project_dir,
+            exc,
+        )
 
     def _install_safety_hook(self) -> None:
         hooks_dir = self.git_dir / "hooks"
